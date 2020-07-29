@@ -205,6 +205,54 @@ public:
             int& beam_number)
     {
        //TODO
+       ROS_INFO("startIndex: %d beam_number:%d\r\n", startIndex, beam_number);
+       
+       /*  
+            Comments:
+            Orginal: Red
+            AfterCalibation : Green.
+         */
+ 
+        /* get start_pose/end_pose to base_pose */
+        tf::Pose start2base = frame_base_pose.inverse() * frame_start_pose;
+        tf::Pose end2base =   frame_base_pose.inverse() * frame_end_pose;
+ 
+        /* get pose and oriention */
+        tf::Vector3 start_pos = start2base.getOrigin();
+        tf::Vector3 end_pos = end2base.getOrigin();
+        
+        tf::Quaternion start_rot = start2base.getRotation();
+        tf::Quaternion end_rot = end2base.getRotation();
+        
+        int index = startIndex;
+
+        for(int i=0; i<beam_number; i++)
+        {
+            /* create slerp and create slerped pose*/
+            tf::Vector3    pos = start_pos.lerp(end_pos, (float)i / beam_number);
+            tf::Quaternion rot = end_rot.slerp(end_rot, (float)i / beam_number);
+            tf::Pose cur_pose = tf::Pose(rot, pos);
+
+            
+            /* get scan points in XYZ */
+            float x = ranges[index] * cos(angles[index]);
+            float y = ranges[index] * sin(angles[index]);
+            tf::Vector3 scan_point(x, y, 0.0);
+            
+            /* correct scan points */
+            tf::Vector3 corrected_scan_point = cur_pose * scan_point;
+            
+            /* convert back to range and angles */
+            ranges[index] = sqrt(corrected_scan_point[0] * corrected_scan_point[0] + corrected_scan_point[1] * corrected_scan_point[1]);
+            
+            angles[index] = atan2(corrected_scan_point[1], corrected_scan_point[0]);
+            
+            index++;
+            
+        }
+ 
+       
+
        //end of TODO
     }
 
@@ -236,7 +284,7 @@ public:
         }
 
         // 5ms来进行分段
-        int interpolation_time_duration = 5 * 1000;
+        int interpolation_time_duration = 50 * 1000;
 
         tf::Stamped<tf::Pose> frame_start_pose;
         tf::Stamped<tf::Pose> frame_mid_pose;
@@ -267,6 +315,8 @@ public:
             return ;
         }
 
+        //ROS_INFO("call Lidar_Calibration\r\n");
+        
         int cnt = 0;
         //基准坐标就是第一个位姿的坐标
         frame_base_pose = frame_start_pose;
@@ -289,7 +339,7 @@ public:
                 //对当前的起点和终点进行插值
                 //interpolation_time_duration中间有多少个点.
                 int interp_count = i - start_index + 1;
-
+               // ROS_INFO("call Lidar_MotionCalibration\r\n");
                 Lidar_MotionCalibration(frame_base_pose,
                                         frame_start_pose,
                                         frame_mid_pose,
@@ -315,11 +365,45 @@ public:
 };
 
 
+static void dump_vec(tf::Vector3 *v)
+{
+    ROS_INFO("vec:%f %f %f\r\n", v->x(), v->y(), v->z());
+}
 
 
 int main(int argc,char ** argv)
 {
     ros::init(argc,argv,"LidarMotionCalib");
+
+        /*
+        tf::Pose tsf;
+       
+        tsf = tf::Pose( tf::Quaternion(0,0,0,1) , tf::Vector3(1,2,3) );  
+        tsf.inverse();
+        ROS_INFO("!!!!!!!");
+        
+        tf::Quaternion q;            // 欧拉角类
+        q.setRPY(30, 40, 50);  //target_frame相对于source_frame的欧拉角
+        ROS_INFO("q:%f %f %f %f\r\n", q.w(), q.x(), q.y(), q.z());
+        tsf.setRotation(q);    //设置tf变换的 欧拉角
+        
+
+        tf::Vector3 vec = tsf.getOrigin();
+        tf::Quaternion q2 = tsf.getRotation();
+        
+        ROS_INFO("vec:%f %f %f\r\n", vec.x(), vec.y(), vec.z());
+        ROS_INFO("q2:%f %f %f %f\r\n", q2.w(), q2.x(), q2.y(), q2.z());
+        */
+        
+        /*
+        tf::Vector3 v1 = tf::Vector3(1,2,3);
+        tf::Vector3 v2 = tf::Vector3(10,20,30);
+        tf::Vector3 v_res = v1.lerp(v2, 0.01);
+        dump_vec(&v_res);
+        */
+        
+        
+     //   while(1);
 
     tf::TransformListener tf(ros::Duration(10.0));
 
